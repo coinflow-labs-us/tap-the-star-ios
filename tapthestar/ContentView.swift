@@ -148,7 +148,7 @@ struct ContentView: View {
                     .foregroundColor(.gray)
                 Button(action: {
                     gameState.showBuyModal = false
-                    openSafari()
+                    goToCheckoutPage()
                 }) {
                     HStack {
                         Image(systemName: "cart.fill")
@@ -206,14 +206,13 @@ struct ContentView: View {
         return address
     }
 
-    private func openSafari() {
-        let apiUrl = Bundle.main.infoDictionary?["API_URL"] as! String
-        let apiKey =
-            Bundle.main.infoDictionary?["API_KEY"] as! String
+    private func getCheckoutURLFromDummyServer() -> String {
+        let apiUrl = "https://api-sandbox.coinflow.cash"
+        let apiKey = "MY_API_KEY"
         let userID = "user_12345"
         let myIP = getOwnIPAddress() ?? "127.0.0.1"
 
-        guard let url = URL(string: "\(apiUrl)/api/checkout/link") else { return }
+        guard let url = URL(string: "\(apiUrl)/api/checkout/link") else { return "" }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(apiKey, forHTTPHeaderField: "Authorization")
@@ -232,18 +231,30 @@ struct ContentView: View {
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
+        var checkoutLink: String?
+        let semaphore = DispatchSemaphore(value: 0)
+
         URLSession.shared.dataTask(with: request) { data, response, error in
+            defer { semaphore.signal() }
+
             guard let data = data, error == nil else { return }
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                 let link = json["link"] as? String
             {
-                let checkoutUrl = URL(string: link)!
-
-                DispatchQueue.main.async {
-                    openURL(checkoutUrl)
-                }
+                checkoutLink = link
             }
         }.resume()
+
+        semaphore.wait()
+        return checkoutLink ?? ""
+    }
+
+    private func goToCheckoutPage() {
+        let checkoutUrlStr = getCheckoutURLFromDummyServer()
+        let checkoutUrl = URL(string: checkoutUrlStr)!
+        DispatchQueue.main.async {
+            openURL(checkoutUrl)
+        }
     }
 }
 
